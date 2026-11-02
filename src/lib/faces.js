@@ -39,6 +39,15 @@ export function similarityTransform(src, dst = FACE_TEMPLATE) {
   return [a, b, dx - (a * sx - b * sy), dy - (b * sx + a * sy)]
 }
 
+// True when the face looks straight at the camera and is level: the nose sits
+// between the eyes and the eyes are on a roughly horizontal line.
+export function isFrontal(kps) {
+  const [re, le, nose] = kps
+  const eyeDist = Math.hypot(le[0] - re[0], le[1] - re[1]) || 1
+  const mid = (re[0] + le[0]) / 2
+  return Math.abs(nose[0] - mid) <= 0.3 * eyeDist && Math.abs(le[1] - re[1]) <= 0.35 * eyeDist
+}
+
 export function normalize(v) {
   let s = 0
   for (const x of v) s += x * x

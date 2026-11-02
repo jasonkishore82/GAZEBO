@@ -5,13 +5,14 @@ import { useEffect, useId, useRef } from 'react'
 // paths directly, so the mouth morphs smoothly without re-rendering React.
 
 const POSES = {
-  //          smile  open  width  arch  tongue skew  blush
-  idle:      { smile: 0.95, open: 0,    w: 75, arch: 0,   tongue: 0,    skew: 0,    blush: 0.25 },
-  curious:   { smile: 0.35, open: 0.08, w: 65, arch: 0,   tongue: 0,    skew: 0.7,  blush: 0.2 },
-  happy:     { smile: 1,    open: 1,    w: 104, arch: 0,   tongue: 1,    skew: 0,    blush: 0.8 },
-  surprised: { smile: 0,    open: 0.95, w: 32, arch: 1,   tongue: 0.35, skew: 0,    blush: 0.1 },
-  talking:   { smile: 0.5,  open: 0.2,  w: 70, arch: 0.3, tongue: 0.7,  skew: 0,    blush: 0.55 },
-  sleepy:    { smile: 0.15, open: 0.12, w: 55, arch: 0,   tongue: 0,    skew: -0.2, blush: 0.35 },
+  //          smile  open  width  arch  tongue skew
+  idle:      { smile: 0.95, open: 0,    w: 75, arch: 0,   tongue: 0,    skew: 0 },
+  curious:   { smile: 0.35, open: 0.08, w: 65, arch: 0,   tongue: 0,    skew: 0.7 },
+  happy:     { smile: 1,    open: 1,    w: 104, arch: 0,   tongue: 1,    skew: 0 },
+  surprised: { smile: 0,    open: 0.95, w: 32, arch: 1,   tongue: 0.35, skew: 0 },
+  talking:   { smile: 0.5,  open: 0.2,  w: 70, arch: 0.3, tongue: 0.7,  skew: 0 },
+  asleep:    { smile: 0.1,  open: 0.1,  w: 40, arch: 0.6, tongue: 0,    skew: 0 },
+  sleepy:    { smile: 0.15, open: 0.12, w: 55, arch: 0,   tongue: 0,    skew: -0.2 },
 }
 
 const LIP = '#4a1b22'
@@ -114,9 +115,6 @@ export default function Mouth({ look, mood, levelRef }) {
       const gy = l ? (l.y / window.innerHeight - 0.5) * 10 : 0
       e.face.setAttribute('transform', `translate(${f(gx)} ${f(gy)})`)
 
-      e.blushL.style.opacity = p.blush
-      e.blushR.style.opacity = p.blush
-
       raf = requestAnimationFrame(frame)
     }
     raf = requestAnimationFrame(frame)
@@ -142,14 +140,7 @@ export default function Mouth({ look, mood, levelRef }) {
           <stop offset="0" stopColor="#ffffff" />
           <stop offset="1" stopColor="#ecdcd8" />
         </linearGradient>
-        <radialGradient id={`${id}-blush`}>
-          <stop offset="0" stopColor="#ff7f9a" stopOpacity="0.55" />
-          <stop offset="1" stopColor="#ff7f9a" stopOpacity="0" />
-        </radialGradient>
       </defs>
-
-      <ellipse ref={ref('blushL')} cx="-305" cy="-8" rx="52" ry="30" fill={`url(#${id}-blush)`} />
-      <ellipse ref={ref('blushR')} cx="305" cy="-8" rx="52" ry="30" fill={`url(#${id}-blush)`} />
 
       <g ref={ref('face')}>
         <path ref={ref('fill')} fill={INSIDE} />

@@ -105,6 +105,12 @@ export default function SettingsPanel({ settings, set, reset, onClose, anchorRef
           onChange={(v) => set('hands', v)}
         />
         <Toggle
+          label="GPU acceleration (reload)"
+          hint="Run the detection models on the graphics card via WebGPU. Reload the page after changing."
+          checked={settings.gpu}
+          onChange={(v) => set('gpu', v)}
+        />
+        <Toggle
           label="Face recognition (SFace)"
           hint="Recognise saved faces so the voice chat can say your name"
           checked={settings.recognize}
@@ -169,6 +175,15 @@ export default function SettingsPanel({ settings, set, reset, onClose, anchorRef
         <Color label="Eye colour" value={settings.eyeColor} onChange={(v) => set('eyeColor', v)} />
         <Color label="Face colour" value={settings.faceColor} onChange={(v) => set('faceColor', v)} />
         <Slider
+          label="Eye contact"
+          value={settings.eyeContact}
+          min={0}
+          max={1}
+          step={0.05}
+          format={pct}
+          onChange={(v) => set('eyeContact', v)}
+        />
+        <Slider
           label="Expression strength"
           value={settings.expression}
           min={0}
@@ -185,6 +200,12 @@ export default function SettingsPanel({ settings, set, reset, onClose, anchorRef
           label="Camera preview"
           checked={settings.showPreview}
           onChange={(v) => set('showPreview', v)}
+        />
+        <Toggle
+          label="3D character"
+          hint="A body with a neck, and a head that turns toward what it watches"
+          checked={settings.character3d}
+          onChange={(v) => set('character3d', v)}
         />
         <Toggle
           label="Character hands"

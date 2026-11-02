@@ -7,17 +7,20 @@ export const DEFAULTS = {
   blink: true,
   hands: true,
   recognize: true,
+  gpu: true, // run the detection models on the GPU (WebGPU) when the browser has one; reload to apply
   voice: '', // '' = the server's GEMINI_LIVE_VOICE
   // look
   eyeColor: '#307d76',
   faceColor: '#93c572',
   expression: 1,
+  eyeContact: 0.75, // 0 follows the face's position, 1 always looks straight at you
   // detection
   objectConf: 0.4,
   faceConf: 0.6,
   onlyPeople: false,
   blinkSens: 0.6,
   // display
+  character3d: false, // head turn + body
   showPreview: true,
   showBoxes: true,
   showLandmarks: false,

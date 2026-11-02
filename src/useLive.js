@@ -20,7 +20,7 @@ function fromBase64(b64) {
   return out
 }
 
-export function useLive({ face = '', speaker = null, onPcm, voice = '' } = {}) {
+export function useLive({ face = '', speaker = null, onPcm, voice = '', onToolCall } = {}) {
   const [state, setState] = useState('off') // off | connecting | live | error
   const [message, setMessage] = useState('')
   const [speaking, setSpeaking] = useState(false)
@@ -31,6 +31,8 @@ export function useLive({ face = '', speaker = null, onPcm, voice = '' } = {}) {
   const voiceRef = useRef(voice)
   voiceRef.current = voice
   const onPcmRef = useRef(onPcm)
+  const onToolRef = useRef(onToolCall)
+  onToolRef.current = onToolCall
   const sentKey = useRef('')
   faceRef.current = face
   onPcmRef.current = onPcm
@@ -41,6 +43,8 @@ export function useLive({ face = '', speaker = null, onPcm, voice = '' } = {}) {
     if (!r) return
     cancelAnimationFrame(r.raf)
     clearTimeout(r.capTimer)
+    clearTimeout(r.timeout)
+    clearTimeout(r.slow)
     try { r.ws.close() } catch { /* already closed */ }
     r.mic?.stop()
     r.outCtx.close().catch(() => {})
@@ -58,7 +62,12 @@ export function useLive({ face = '', speaker = null, onPcm, voice = '' } = {}) {
   const start = useCallback(async () => {
     if (rt.current) return
     setState('connecting')
-    setMessage('Connecting…')
+    if (!navigator.mediaDevices?.getUserMedia) {
+      setState('error')
+      setMessage('Microphone access needs a secure page: open the app at http://localhost:5175 (not a network address).')
+      return
+    }
+    setMessage('Waiting for microphone permission…')
 
     const outCtx = new AudioContext({ sampleRate: OUT_RATE })
     const analyser = outCtx.createAnalyser()
@@ -70,6 +79,10 @@ export function useLive({ face = '', speaker = null, onPcm, voice = '' } = {}) {
     const r = { ws, mic: null, outCtx, raf: 0, capTimer: 0, playAt: 0, sources: new Set(), ready: false }
     rt.current = r
 
+    // if the browser's permission prompt is ignored or hidden, say so instead of doing nothing
+    r.slow = setTimeout(() => {
+      if (rt.current === r && !r.ready) setMessage('Still waiting. Check your browser for a microphone permission prompt.')
+    }, 6000)
     try {
       r.mic = await openMic((pcm) => {
         if (!r.ready || ws.readyState !== 1) return
@@ -93,6 +106,10 @@ export function useLive({ face = '', speaker = null, onPcm, voice = '' } = {}) {
       r.mic.stop() // stopped while the permission prompt was open
       return
     }
+    setMessage('Connecting…')
+    r.timeout = setTimeout(() => {
+      if (rt.current === r && !r.ready) fail('Voice chat took too long to connect. Check the dev server and try again.')
+    }, 15000)
 
     const buf = new Uint8Array(analyser.fftSize)
     const tick = () => {
@@ -136,8 +153,24 @@ export function useLive({ face = '', speaker = null, onPcm, voice = '' } = {}) {
       let m
       try { m = JSON.parse(ev.data) } catch { return }
       if (m.error) return fail(m.error)
+      if (m.toolCall) {
+        // run each requested tool in the app, then hand the results back to the model
+        const calls = m.toolCall.functionCalls || []
+        Promise.all(
+          calls.map(async (c) => ({
+            id: c.id,
+            name: c.name,
+            response: { output: (await onToolRef.current?.(c.name, c.args)) ?? { ok: false, error: 'No handler' } },
+          }))
+        ).then((functionResponses) => {
+          if (ws.readyState === 1) ws.send(JSON.stringify({ toolResponse: { functionResponses } }))
+        })
+        return
+      }
       if (m.setupComplete) {
         r.ready = true
+        clearTimeout(r.timeout)
+        clearTimeout(r.slow)
         sentKey.current = `${faceRef.current}|`
         setState('live')
         setMessage('Listening')
@@ -195,7 +228,15 @@ export function useLive({ face = '', speaker = null, onPcm, voice = '' } = {}) {
     return () => clearTimeout(t)
   }, [voice, start, stop])
 
+  // end the chat without starting one (used when the avatar goes to sleep)
+  const end = useCallback(() => {
+    if (!rt.current) return
+    stop()
+    setState('off')
+    setMessage('')
+  }, [stop])
+
   const toggle = useCallback(() => (rt.current ? (stop(), setState('off'), setMessage('')) : start()), [start, stop])
 
-  return { state, message, speaking, caption, levelRef, toggle }
+  return { state, message, speaking, caption, levelRef, toggle, end }
 }

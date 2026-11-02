@@ -131,6 +131,7 @@ export function lidClosure(score, sensitivity) {
 }
 
 // Scale factor that fits the fixed-size character into the viewport.
-export function sceneScale(width, height) {
-  return Math.min(1.15, Math.max(0.35, Math.min(width / 1180, height / 760)))
+// `tall` is the design height: the 3D character (head, neck, body) needs more.
+export function sceneScale(width, height, tall = 760) {
+  return Math.min(1.15, Math.max(0.35, Math.min(width / 1180, height / tall)))
 }

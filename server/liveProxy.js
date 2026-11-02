@@ -1,5 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws'
 import { VOICE_NAMES } from '../src/lib/voices.js'
+import { TOOL_DECLARATIONS } from '../src/lib/toolDefs.js'
 
 const UPSTREAM =
   'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent'
@@ -16,7 +17,7 @@ export function personaFor(who, names) {
   const now = who
     ? `The camera has just recognised the person talking to you as ${who}. If they ask their name or who they are, answer ${who}, and feel free to greet them by name.`
     : 'The camera does not recognise the person talking to you. If they ask their name, say you do not recognise them yet and that they can press the Add face button to introduce themselves; never guess a name.'
-  return `${BASE_PERSONA} ${known} ${now} If they tell you a different name, use it in conversation, but trust the camera facts above. Messages that start with [Voice update] or [Camera update] come from the app, not the user: they say who is speaking (identified by their voice) and who is on camera. When they differ, a different person than the one on camera is speaking, so talk to the speaker by name; never read these messages aloud and never reply to them on their own.`
+  return `${BASE_PERSONA} ${known} ${now} If they tell you a different name, use it in conversation, but trust the camera facts above. Messages that start with [Voice update] or [Camera update] come from the app, not the user: they say who is speaking (identified by their voice) and who is on camera. When they differ, a different person than the one on camera is speaking, so talk to the speaker by name; never read these messages aloud and never reply to them on their own. You have tools for controlling yourself. When someone says they are leaving and you should not wake up until they (or certain other people) return, call list_users first to see who is registered, then set_wake_policy with the real registered names (use the speaker's own name for "me"; set any_registered when they say any other user may wake you). If a name is not registered, say so. After the tool succeeds, say a short goodnight and that you will wake for those people; you then fall asleep. Use go_to_sleep, wake_up, clear_wake_policy and change_colors when asked. To save a new person: when someone says to save the person on camera ("save him as Sam"), call register_face with the name, then ask aloud "Save him as Sam, is that right?" and wait for a clear yes before calling confirm_pending with confirm true (if they correct the name, pass it). For a voice ("save his voice too"): call register_voice, tell the person to keep talking for a few seconds, call finish_voice_recording, ask to confirm the name, then confirm_pending. To delete someone's saved face or voice: call remove_person, ask aloud to confirm the deletion, and only after a yes call confirm_pending with confirm true. Never save or delete without that spoken yes. Never mention tool names aloud.`
 }
 
 // Dev/preview-server plugin: the browser talks to /api/live and this relays to
@@ -59,6 +60,7 @@ export function liveProxy(env, getNames = async () => []) {
                 speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: voice } } },
               },
               systemInstruction: { parts: [{ text: persona }] },
+              tools: [{ functionDeclarations: TOOL_DECLARATIONS }],
               inputAudioTranscription: {},
               outputAudioTranscription: {},
             },

@@ -1,14 +1,53 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import * as ort from 'onnxruntime-web/wasm'
-import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.wasm?url'
-import mjsUrl from 'onnxruntime-web/ort-wasm-simd-threaded.mjs?url'
+import * as ort from 'onnxruntime-web/webgpu'
+import wasmUrl from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.wasm?url'
+import mjsUrl from 'onnxruntime-web/ort-wasm-simd-threaded.asyncify.mjs?url'
 import { INPUT, decodeYolo, decodeYuNet, toYoloInput, toYuNetInput } from './lib/detection.js'
-import { FACE_SIZE, averageEmbeddings, matchFace, normalize, similarityTransform } from './lib/faces.js'
+import { FACE_SIZE, averageEmbeddings, isFrontal, matchFace, normalize, similarityTransform } from './lib/faces.js'
 
 ort.env.wasm.wasmPaths = { mjs: mjsUrl, wasm: wasmUrl }
 ort.env.wasm.numThreads = 1
-// run inference in ORT's own worker so the page stays responsive
-ort.env.wasm.proxy = true
+
+// Run on the GPU through WebGPU when the browser offers it (and the gpu setting
+// isn't switched off); otherwise on the CPU. This is decided once per page load.
+function wantsGpu() {
+  try {
+    if (sessionStorage.getItem('greeny-no-gpu')) return false // WebGPU failed earlier in this tab
+    if (JSON.parse(localStorage.getItem('greeny-settings') || '{}').gpu === false) return false
+  } catch {
+    /* storage unavailable: use the default */
+  }
+  return typeof navigator !== 'undefined' && !!navigator.gpu
+}
+const GPU = wantsGpu()
+// On the CPU, inference goes in ORT's own worker so the page stays responsive.
+// WebGPU can't run behind that worker, but there the GPU does the heavy lifting.
+ort.env.wasm.proxy = !GPU
+const backend = GPU ? 'gpu' : 'cpu'
+
+// WebGPU sessions have to be created one at a time.
+let sessionQueue = Promise.resolve()
+function createSession(path) {
+  const made = sessionQueue.then(async () => {
+    if (!GPU) return ort.InferenceSession.create(path, { executionProviders: ['wasm'] })
+    try {
+      return await ort.InferenceSession.create(path, { executionProviders: ['webgpu'] })
+    } catch (e) {
+      // The CPU backend can't be switched to its worker once WebGPU has been
+      // tried, so start over on the CPU with a fresh page.
+      console.warn(`WebGPU failed for ${path}; reloading on the CPU:`, e)
+      try {
+        sessionStorage.setItem('greeny-no-gpu', '1')
+      } catch {
+        /* ignore */
+      }
+      location.reload()
+      return new Promise(() => {})
+    }
+  })
+  sessionQueue = made.catch(() => {})
+  return made
+}
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 
@@ -16,11 +55,7 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
 let modelsPromise
 function loadModels() {
   if (!modelsPromise) {
-    const opts = { executionProviders: ['wasm'] }
-    modelsPromise = Promise.all([
-      ort.InferenceSession.create('/models/yolov8n-f32.onnx', opts),
-      ort.InferenceSession.create('/models/yunet.onnx', opts),
-    ]).catch((e) => {
+    modelsPromise = Promise.all([createSession('/models/yolov8n-f32.onnx'), createSession('/models/yunet.onnx')]).catch((e) => {
       modelsPromise = undefined
       throw e
     })
@@ -33,7 +68,7 @@ function loadModels() {
 let sfacePromise
 function loadSface() {
   if (!sfacePromise) {
-    sfacePromise = ort.InferenceSession.create('/models/sface.onnx', { executionProviders: ['wasm'] }).catch((e) => {
+    sfacePromise = createSession('/models/sface.onnx').catch((e) => {
       sfacePromise = undefined
       throw e
     })
@@ -125,6 +160,7 @@ export function usePersonTracker(settings, faces = []) {
   const [target, setTarget] = useState(null)
   const [status, setStatus] = useState({ state: 'loading', message: 'Loading models' })
   const [fps, setFps] = useState(0)
+  const [accel, setAccel] = useState(backend)
   const [attempt, setAttempt] = useState(0)
 
   const retry = useCallback(() => setAttempt((a) => a + 1), [])
@@ -150,6 +186,7 @@ export function usePersonTracker(settings, faces = []) {
       let yolo, yunet
       try {
         ;[yolo, yunet] = await loadModels()
+        setAccel(backend)
       } catch (e) {
         console.error(e)
         if (!stopped) setStatus({ state: 'error', message: 'Could not load the detection models' })
@@ -191,6 +228,9 @@ export function usePersonTracker(settings, faces = []) {
         let sface = null
         loadSface().then((s) => (sface = s), (e) => console.warn('Face recognition unavailable:', e))
         let frames = 0
+        let frameNo = 0
+        let lastObjects = []
+        let lastFaceAt = 0
         let windowStart = performance.now()
 
         while (!stopped) {
@@ -208,13 +248,19 @@ export function usePersonTracker(settings, faces = []) {
           const vh = video.videoHeight
 
           // 1. YOLO: objects and the person, across the whole frame
+          // (while a face is locked, the full-frame pass runs every third frame
+          // and the last result is reused in between)
           let objects = []
-          if (cfg.yolo) {
+          const faceLocked = performance.now() - lastFaceAt < 1000
+          if (cfg.yolo && (!faceLocked || frameNo++ % 3 === 0)) {
             const lb = letterbox(ctx, video, 0, 0, vw, vh)
             const out = await yolo.run({
               images: new ort.Tensor('float32', toYoloInput(lb.data), [1, 3, INPUT, INPUT]),
             })
             objects = decodeYolo(out.output0.data, cfg, lb)
+            lastObjects = objects
+          } else if (cfg.yolo) {
+            objects = lastObjects
           }
           const person = objects.find((d) => d.cls === 0) || null
 
@@ -246,6 +292,8 @@ export function usePersonTracker(settings, faces = []) {
             }
           }
 
+          if (face) lastFaceAt = performance.now()
+
           // 3. SFace: who is it? Matches against the saved faces a couple of
           // times a second, and takes capture samples when adding a face.
           const nowMs = performance.now()
@@ -256,7 +304,9 @@ export function usePersonTracker(settings, faces = []) {
           }
           if (face?.kps && sface) {
             rec.seenAt = nowMs
-            const capturing = captureRef.current && face.score >= 0.7 && nowMs - captureRef.current.lastAt > 220
+            // a clear, large, front-facing face makes the best saved photo
+            const capturing =
+              captureRef.current && face.score >= 0.7 && face.w >= 80 && isFrontal(face.kps) && nowMs - captureRef.current.lastAt > 220
             const due = cfg.recognize && nowMs - rec.at > 500 && facesRef.current.length > 0
             if (capturing || due) {
               const emb = await embedFace(sface, video, face.kps, faceCtx)
@@ -329,5 +379,5 @@ export function usePersonTracker(settings, faces = []) {
     }
   }, [attempt])
 
-  return { videoRef, target, status, fps, retry, identity, captureFace }
+  return { videoRef, target, status, fps, accel, retry, identity, captureFace }
 }

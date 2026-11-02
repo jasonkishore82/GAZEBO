@@ -16,6 +16,7 @@ const MOODS = {
   happy: { upper: 0.1, lower: 0.28, tilt: -4, pupil: 1.35, iris: 1.05 },
   surprised: { upper: -0.12, lower: 0, tilt: 0, pupil: 0.55, iris: 1.08 },
   sleepy: { upper: 0.5, lower: 0.05, tilt: 5, pupil: 0.9, iris: 1 },
+  asleep: { upper: 1, lower: 0.12, tilt: 0, pupil: 0.8, iris: 1 },
 }
 
 const EASE = '260ms cubic-bezier(0.25, 0.8, 0.25, 1)'
@@ -37,7 +38,7 @@ function usePrefersReducedMotion() {
 // `look` is a screen point to watch. `sync` is how shut the user's eye is
 // (0..1), or null to blink on our own. `expression` scales how far moods pull
 // the face away from idle.
-export default function Eye({ look, mood = 'idle', side = 1, sync = null, expression = 1 }) {
+export default function Eye({ look, mood = 'idle', side = 1, sync = null, expression = 1, contact = 0 }) {
   const uid = useId().replace(/:/g, '')
   const ref = useRef(null)
   const irisRef = useRef(null)
@@ -102,7 +103,7 @@ export default function Eye({ look, mood = 'idle', side = 1, sync = null, expres
 
   const target = MOODS[mood] || MOODS.idle
   const pose = Object.fromEntries(
-    Object.keys(MOODS.idle).map((k) => [k, MOODS.idle[k] + (target[k] - MOODS.idle[k]) * expression])
+    Object.keys(MOODS.idle).map((k) => [k, MOODS.idle[k] + (target[k] - MOODS.idle[k]) * (mood === 'asleep' ? 1 : expression)])
   )
 
   // Aim the iris toward the look point from this eye's centre. The scene is
@@ -119,12 +120,17 @@ export default function Eye({ look, mood = 'idle', side = 1, sync = null, expres
     x = (dx / dist) * m
     y = (dy / dist) * m
   }
+  // eye contact: the pupils settle on the viewer, each a little inward (the
+  // way two eyes converge on someone in front of them) instead of on the face's
+  // position, which would make the character look past you
+  x += (-side * 8 - x) * contact
+  y += (0 - y) * contact
   goal.current = { x: x + jitter.x, y: y + jitter.y, s: pose.iris }
 
   // synced: the lid follows the user's eye
   const synced = sync !== null
   const upper = synced ? pose.upper + (1 - pose.upper) * sync : blink ? 1 : pose.upper
-  const lidMs = synced || blink ? '70ms' : EASE
+  const lidMs = synced || blink ? '70ms' : mood === 'asleep' ? '900ms' : EASE
   const lidTransition = reduced ? 'none' : `transform ${lidMs}`
   const moodTransition = reduced ? 'none' : `transform ${EASE}`
   const lidEdge = 'color-mix(in srgb, var(--face) 62%, black)'

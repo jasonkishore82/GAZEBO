@@ -351,3 +351,56 @@ export function RecordVoiceWindow({ names, onSave, onClose, anchorRef }) {
     </Modal>
   )
 }
+
+// Shown while a save or delete is waiting for a yes: the captured photo (or a
+// voice sample), the name (editable), and buttons - the same answer can be given by voice.
+export function PendingCard({ pending, onName, onConfirm }) {
+  const { kind, name, status } = pending
+  const busy = status !== 'ready'
+  const title =
+    kind === 'remove'
+      ? `Delete ${pending.what === 'both' ? 'face and voice' : pending.what} of ${name}?`
+      : kind === 'face'
+        ? 'Save this face?'
+        : status === 'recording'
+          ? 'Listening\u2026 keep talking'
+          : 'Save this voice?'
+  return (
+    <div className="pending" role="dialog" aria-label={title}>
+      {kind === 'face' && pending.thumbnail && <img src={pending.thumbnail} alt="Captured face" />}
+      {kind === 'voice' && (
+        <div className={`pending-voice${status === 'recording' ? ' rec' : ''}`} aria-hidden="true">
+          {'\u{1F399}'}
+        </div>
+      )}
+      <div className="pending-body">
+        <strong>{title}</strong>
+        {kind !== 'remove' ? (
+          <input
+            value={name}
+            onChange={(e) => onName(e.target.value)}
+            aria-label="Name"
+            maxLength={120}
+            disabled={status === 'saving'}
+          />
+        ) : (
+          <small>
+            {pending.faces ? `${pending.faces} face${pending.faces > 1 ? 's' : ''}` : ''}
+            {pending.faces && pending.voices ? ' and ' : ''}
+            {pending.voices ? `${pending.voices} voice${pending.voices > 1 ? 's' : ''}` : ''} will be removed.
+          </small>
+        )}
+        {kind === 'voice' && status === 'ready' && pending.seconds && <small>{Math.round(pending.seconds)} s of speech captured</small>}
+        <small className="pending-hint">{status === 'recording' ? 'Say anything for a few seconds.' : 'You can also answer out loud.'}</small>
+      </div>
+      <div className="pending-actions">
+        <button className={`btn ${kind === 'remove' ? 'danger' : 'primary'}`} disabled={busy || !name.trim()} onClick={() => onConfirm(true)}>
+          {kind === 'remove' ? 'Delete' : status === 'saving' ? 'Saving\u2026' : 'Save'}
+        </button>
+        <button className="btn" disabled={status === 'saving'} onClick={() => onConfirm(false)}>
+          {kind === 'remove' ? 'Keep' : 'Discard'}
+        </button>
+      </div>
+    </div>
+  )
+}

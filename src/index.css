@@ -927,3 +927,379 @@ button {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
 }
+
+/* ---------- 3D character (optional): head turn, neck and body ---------- */
+.app {
+  --yaw: 0;
+  --pitch: 0;
+  --breath: 0;
+}
+
+.head {
+  position: absolute;
+  inset: 0;
+}
+
+.app.is-3d {
+  /* the head's centre: raised to make room for a body, but never so high that the top is cut off */
+  --cy: max(calc(50% - 100px * var(--s)), calc(310px * var(--s)));
+  --noise: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 0 .22 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.is-3d .head {
+  transform-origin: 50% calc(var(--cy) + 300px * var(--s));
+  transform: perspective(2400px) translateY(calc(var(--breath) * 2px))
+    rotateY(calc(var(--yaw) * 6deg)) rotateX(calc(var(--pitch) * -3deg));
+  will-change: transform;
+}
+
+/* a rounded head instead of one that runs off the bottom of the screen */
+.is-3d .dome {
+  top: calc(var(--cy) - 295px * var(--s));
+  height: calc(600px * var(--s));
+  min-height: 0;
+  border-radius: calc(530px * var(--s)) calc(530px * var(--s)) calc(170px * var(--s)) calc(170px * var(--s));
+  box-shadow:
+    inset 0 2px 1px rgba(255, 255, 255, 0.35),
+    inset 0 28px 50px rgba(255, 255, 255, 0.2),
+    inset 60px 0 90px rgba(20, 45, 15, 0.22),
+    inset -60px 0 90px rgba(20, 45, 15, 0.22),
+    inset 0 -40px 60px rgba(10, 30, 10, 0.25),
+    0 36px 40px rgba(0, 0, 0, 0.45);
+}
+
+/* cylinder shading across the width, plus a fine matte grain */
+.is-3d .dome::after,
+.is-3d .body::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.1), transparent 28%, transparent 58%, rgba(8, 28, 8, 0.3) 100%),
+    var(--noise);
+}
+
+/* the sheen slides across the head as it turns */
+.is-3d .dome::before {
+  left: calc(18% - var(--yaw) * 5%);
+}
+
+.is-3d .eyes {
+  top: var(--cy);
+  transform: translate(-50%, -50%) translate(calc(var(--yaw) * 28px * var(--s)), calc(var(--pitch) * 9px * var(--s)))
+    scale(var(--s));
+}
+
+.is-3d .mouth {
+  top: calc(var(--cy) + 172px * var(--s));
+  transform: translateX(-50%) translate(calc(var(--yaw) * 34px * var(--s)), calc(var(--pitch) * 11px * var(--s)));
+}
+
+.neck,
+.body {
+  position: absolute;
+  left: 50%;
+  pointer-events: none;
+  background:
+    linear-gradient(90deg,
+      color-mix(in srgb, var(--face) 48%, black) 0%,
+      color-mix(in srgb, var(--face) 88%, white) 32%,
+      var(--face) 50%,
+      color-mix(in srgb, var(--face) 70%, black) 84%,
+      color-mix(in srgb, var(--face) 42%, black) 100%);
+}
+
+.neck {
+  top: calc(var(--cy) + 270px * var(--s));
+  width: calc(470px * var(--s));
+  height: calc(140px * var(--s));
+  transform: translateX(-50%) translateX(calc(var(--yaw) * -4px * var(--s)));
+  box-shadow: inset 0 50px 40px rgba(0, 0, 0, 0.5);
+}
+
+.body {
+  top: calc(var(--cy) + 345px * var(--s));
+  bottom: -2px;
+  width: calc(940px * var(--s));
+  transform: translateX(-50%) translateX(calc(var(--yaw) * -8px * var(--s))) scaleY(calc(1 + var(--breath) * 0.004));
+  transform-origin: 50% 100%;
+  border-radius: calc(320px * var(--s)) calc(320px * var(--s)) 0 0 / calc(180px * var(--s)) calc(180px * var(--s)) 0 0;
+  box-shadow:
+    inset 0 3px 2px rgba(255, 255, 255, 0.28),
+    inset 0 40px 60px rgba(255, 255, 255, 0.1),
+    inset 0 -80px 100px rgba(0, 0, 0, 0.3),
+    0 -12px 40px rgba(0, 0, 0, 0.4);
+}
+
+/* ---------- sleeping ---------- */
+.zzz {
+  position: fixed;
+  left: 62%;
+  top: calc(var(--cy, 50%) - 230px * var(--s));
+  z-index: 3;
+  display: flex;
+  gap: 10px;
+  align-items: flex-end;
+  font: 700 calc(42px * var(--s)) / 1 var(--font);
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  text-shadow: 0 2px 10px rgba(0, 0, 0, 0.35);
+}
+
+.zzz span {
+  opacity: 0;
+  animation: zzz 3s ease-in-out infinite;
+}
+
+.zzz span:nth-child(2) {
+  animation-delay: 0.9s;
+  font-size: 1.3em;
+}
+
+.zzz span:nth-child(3) {
+  animation-delay: 1.8s;
+  font-size: 1.7em;
+}
+
+@keyframes zzz {
+  0% {
+    opacity: 0;
+    transform: translate(0, 14px);
+  }
+  30%,
+  60% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+    transform: translate(18px, -26px);
+  }
+}
+
+/* ---------- 3D character, robot build: boxy head, ears, antenna, collar, torso ---------- */
+.app.is-3d {
+  --shade: linear-gradient(90deg,
+    color-mix(in srgb, var(--face) 45%, black) 0%,
+    color-mix(in srgb, var(--face) 86%, white) 34%,
+    var(--face) 52%,
+    color-mix(in srgb, var(--face) 68%, black) 84%,
+    color-mix(in srgb, var(--face) 40%, black) 100%);
+  --cy: max(calc(50% - 90px * var(--s)), calc(432px * var(--s)));
+}
+
+.is-3d .dome {
+  top: calc(var(--cy) - 300px * var(--s));
+  width: calc(1000px * var(--s));
+  height: calc(620px * var(--s));
+  border-radius: calc(250px * var(--s));
+}
+
+.is-3d .head {
+  transform-origin: 50% calc(var(--cy) + 320px * var(--s));
+}
+
+.ear {
+  position: absolute;
+  top: calc(var(--cy) - 70px * var(--s));
+  width: calc(70px * var(--s));
+  height: calc(210px * var(--s));
+  border-radius: calc(36px * var(--s));
+  background: var(--shade);
+  box-shadow: inset 0 2px 2px rgba(255, 255, 255, 0.3), 0 8px 18px rgba(0, 0, 0, 0.4);
+}
+
+.ear.l {
+  left: calc(50% - 544px * var(--s));
+}
+
+.ear.r {
+  left: calc(50% + 474px * var(--s));
+}
+
+.antenna {
+  position: absolute;
+  left: 50%;
+  top: calc(var(--cy) - 372px * var(--s));
+  width: calc(14px * var(--s));
+  height: calc(90px * var(--s));
+  transform: translateX(-50%);
+  border-radius: calc(8px * var(--s));
+  background: var(--shade);
+}
+
+.antenna::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: calc(-30px * var(--s));
+  width: calc(44px * var(--s));
+  height: calc(44px * var(--s));
+  margin-left: calc(-22px * var(--s));
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.85), var(--iris) 55%, color-mix(in srgb, var(--iris) 55%, black));
+  box-shadow: 0 0 calc(24px * var(--s)) var(--iris);
+  animation: bulb 2.4s ease-in-out infinite;
+}
+
+@keyframes bulb {
+  50% {
+    box-shadow: 0 0 calc(40px * var(--s)) var(--iris);
+    filter: brightness(1.25);
+  }
+}
+
+/* a short collar, narrower than the head, then a torso narrower still */
+.is-3d .neck {
+  top: calc(var(--cy) + 300px * var(--s));
+  width: calc(300px * var(--s));
+  height: calc(100px * var(--s));
+  border-radius: calc(30px * var(--s));
+  background: var(--shade);
+  box-shadow: inset 0 50px 30px rgba(0, 0, 0, 0.5), inset 0 -10px 12px rgba(0, 0, 0, 0.3);
+}
+
+.is-3d .body {
+  top: calc(var(--cy) + 365px * var(--s));
+  width: calc(720px * var(--s));
+  background: var(--shade);
+  border-radius: calc(200px * var(--s)) calc(200px * var(--s)) 0 0 / calc(150px * var(--s)) calc(150px * var(--s)) 0 0;
+}
+
+.core {
+  position: absolute;
+  pointer-events: none;
+  border-radius: 50%;
+  transform: translateX(calc(var(--yaw) * -8px * var(--s)));
+}
+
+/* a glowing chest light in the eye colour */
+.core {
+  left: 50%;
+  top: calc(var(--cy) + 520px * var(--s));
+  width: calc(96px * var(--s));
+  height: calc(96px * var(--s));
+  margin-left: calc(-48px * var(--s));
+  border: calc(9px * var(--s)) solid color-mix(in srgb, var(--face) 38%, black);
+  background: radial-gradient(circle at 40% 35%, rgba(255, 255, 255, 0.9), var(--iris) 60%, color-mix(in srgb, var(--iris) 55%, black));
+  box-shadow: 0 0 calc(30px * var(--s)) var(--iris), inset 0 2px 3px rgba(255, 255, 255, 0.4);
+}
+
+/* ---------- pending save / delete card ---------- */
+.pending {
+  position: fixed;
+  top: 16px;
+  left: 50%;
+  z-index: 15;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: min(520px, calc(100vw - 32px));
+  padding: 12px 14px;
+  transform: translateX(-50%);
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--glass-solid);
+  box-shadow: var(--shadow);
+  animation: panel-in 200ms var(--ease);
+}
+
+.pending img,
+.pending-voice {
+  width: 72px;
+  height: 72px;
+  flex: none;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #222;
+  transform: scaleX(1);
+}
+
+.pending-voice {
+  display: grid;
+  place-items: center;
+  font-size: 30px;
+}
+
+.pending-voice.rec {
+  animation: pulse 1s ease-in-out infinite;
+  box-shadow: 0 0 0 3px var(--danger);
+}
+
+.pending-body {
+  flex: 1;
+  min-width: 0;
+  display: grid;
+  gap: 4px;
+}
+
+.pending-body input {
+  padding: 6px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ink);
+  font: inherit;
+}
+
+.pending-body small {
+  color: var(--muted);
+}
+
+.pending-hint {
+  font-size: 11px;
+}
+
+.pending-actions {
+  display: grid;
+  gap: 6px;
+}
+
+/* 3D character: bigger face (eyes and mouth) in a slightly taller head */
+.is-3d .dome {
+  height: calc(675px * var(--s));
+}
+
+.is-3d .head {
+  transform-origin: 50% calc(var(--cy) + 350px * var(--s));
+}
+
+.is-3d .eyes {
+  top: calc(var(--cy) - 25px * var(--s));
+  transform: translate(-50%, -50%) translate(calc(var(--yaw) * 28px * var(--s)), calc(var(--pitch) * 9px * var(--s)))
+    scale(calc(var(--s) * 1.15));
+}
+
+.is-3d .mouth {
+  top: calc(var(--cy) + 128px * var(--s));
+  width: calc(874px * var(--s));
+  height: calc(230px * var(--s));
+}
+
+.ear {
+  top: calc(var(--cy) - 100px * var(--s));
+}
+
+.is-3d .neck {
+  top: calc(var(--cy) + 355px * var(--s));
+}
+
+.is-3d .body {
+  top: calc(var(--cy) + 420px * var(--s));
+}
+
+.core {
+  top: calc(var(--cy) + 575px * var(--s));
+}
+
+.icon-btn.mic.wait {
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--warn);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+.icon-btn.mic.bad {
+  color: #fff;
+  box-shadow: 0 0 0 2px var(--danger);
+}

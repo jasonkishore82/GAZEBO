@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { FACE_TEMPLATE, averageEmbeddings, cosine, matchFace, normalize, similarityTransform } from './faces.js'
+import { FACE_TEMPLATE, averageEmbeddings, cosine, isFrontal, matchFace, normalize, similarityTransform } from './faces.js'
 
 const apply = ([a, b, tx, ty], [x, y]) => [a * x - b * y + tx, b * x + a * y + ty]
 
@@ -13,6 +13,15 @@ describe('similarityTransform', () => {
       expect(x).toBeCloseTo(FACE_TEMPLATE[i][0], 4)
       expect(y).toBeCloseTo(FACE_TEMPLATE[i][1], 4)
     })
+  })
+})
+
+describe('isFrontal', () => {
+  it('accepts the standard frontal pose and rejects a turned head', () => {
+    expect(isFrontal(FACE_TEMPLATE)).toBe(true)
+    const turned = FACE_TEMPLATE.map((p) => [...p])
+    turned[2][0] += 25 // nose pushed toward one eye
+    expect(isFrontal(turned)).toBe(false)
   })
 })
 
