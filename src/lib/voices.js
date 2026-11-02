@@ -1,0 +1,36 @@
+// Gemini Live's prebuilt voices, with the style Google describes for each.
+// Shared by the settings dropdown and the server (which only accepts these).
+export const VOICES = [
+  ['Achird', 'Friendly'],
+  ['Puck', 'Upbeat'],
+  ['Zephyr', 'Bright'],
+  ['Kore', 'Firm'],
+  ['Charon', 'Informative'],
+  ['Fenrir', 'Excitable'],
+  ['Leda', 'Youthful'],
+  ['Orus', 'Firm'],
+  ['Aoede', 'Breezy'],
+  ['Callirrhoe', 'Easy-going'],
+  ['Autonoe', 'Bright'],
+  ['Enceladus', 'Breathy'],
+  ['Iapetus', 'Clear'],
+  ['Umbriel', 'Easy-going'],
+  ['Algieba', 'Smooth'],
+  ['Despina', 'Smooth'],
+  ['Erinome', 'Clear'],
+  ['Algenib', 'Gravelly'],
+  ['Rasalgethi', 'Informative'],
+  ['Laomedeia', 'Upbeat'],
+  ['Achernar', 'Soft'],
+  ['Alnilam', 'Firm'],
+  ['Schedar', 'Even'],
+  ['Gacrux', 'Mature'],
+  ['Pulcherrima', 'Forward'],
+  ['Zubenelgenubi', 'Casual'],
+  ['Vindemiatrix', 'Gentle'],
+  ['Sadachbia', 'Lively'],
+  ['Sadaltager', 'Knowledgeable'],
+  ['Sulafat', 'Warm'],
+].map(([name, style]) => ({ name, style }))
+
+export const VOICE_NAMES = new Set(VOICES.map((v) => v.name))
