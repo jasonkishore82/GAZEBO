@@ -19,8 +19,10 @@ export const DEFAULTS = {
   faceConf: 0.6,
   onlyPeople: false,
   blinkSens: 0.6,
+  cameraOn: true, // false stops the camera completely (no tracking, no light)
   // display
-  character3d: false, // head turn + body
+  avatar: 'studio', // 'studio' (ceramic head, glass screen) or 'classic'
+  character3d: false, // classic only: robot body + head turn
   showPreview: true,
   showBoxes: true,
   showLandmarks: false,

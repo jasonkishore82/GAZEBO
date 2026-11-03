@@ -106,6 +106,83 @@ export const TOOL_DECLARATIONS = [
     },
   },
   {
+    name: 'set_camera',
+    description: 'Turn the camera on or off ("turn the camera off", "privacy"). Off means nothing is tracked and the camera light goes out.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { on: { type: 'BOOLEAN', description: 'True to turn the camera on, false to turn it off.' } },
+      required: ['on'],
+    },
+  },
+  {
+    name: 'remember_fact',
+    description:
+      'Remember a short fact about a person ("remember I like green tea"). It is saved and you will know it in future chats. ' +
+      'Defaults to the person who is speaking.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        fact: { type: 'STRING', description: 'The fact, in a short sentence.' },
+        person: { type: 'STRING', description: 'Who it is about. Leave out for the current speaker.' },
+      },
+      required: ['fact'],
+    },
+  },
+  {
+    name: 'forget_fact',
+    description: 'Forget saved facts that mention a word or phrase ("forget that I like tea"). Defaults to the current speaker.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        about: { type: 'STRING', description: 'A word or phrase from the fact to forget.' },
+        person: { type: 'STRING', description: 'Whose facts. Leave out for the current speaker.' },
+      },
+      required: ['about'],
+    },
+  },
+  {
+    name: 'list_facts',
+    description: 'Read back what you remember about a person ("what do you know about me?"). Defaults to the current speaker.',
+    parameters: { type: 'OBJECT', properties: { person: { type: 'STRING', description: 'Whose facts. Leave out for the current speaker.' } } },
+  },
+  {
+    name: 'show_emotion',
+    description: 'Show a feeling on your face for a few seconds ("look happy", "act surprised").',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        emotion: { type: 'STRING', description: 'One of: neutral, happy, curious, surprised, sleepy.' },
+        seconds: { type: 'NUMBER', description: 'How long to hold it (default 6, up to 60).' },
+      },
+      required: ['emotion'],
+    },
+  },
+  {
+    name: 'greet_on_arrival',
+    description: 'Turn greeting on or off: when a registered person comes back in front of the camera you say hello to them by name.',
+    parameters: {
+      type: 'OBJECT',
+      properties: { enabled: { type: 'BOOLEAN', description: 'True to greet people when they arrive (default), false to stop.' } },
+    },
+  },
+  {
+    name: 'set_timer',
+    description: 'Start a timer ("remind me in 10 minutes to check the oven"). You will tell the user when it finishes.',
+    parameters: {
+      type: 'OBJECT',
+      properties: {
+        minutes: { type: 'NUMBER', description: 'Minutes.' },
+        seconds: { type: 'NUMBER', description: 'Seconds.' },
+        label: { type: 'STRING', description: 'What the timer is for.' },
+      },
+    },
+  },
+  {
+    name: 'cancel_timer',
+    description: 'Cancel a timer by its label, or all timers if no label is given.',
+    parameters: { type: 'OBJECT', properties: { label: { type: 'STRING', description: 'The timer label.' } } },
+  },
+  {
     name: 'change_colors',
     description: 'Change your eye colour and/or face colour. Accepts colour names (red, blue, pink...) or hex like #ff8800.',
     parameters: {

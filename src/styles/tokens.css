@@ -1,0 +1,84 @@
+/* Design tokens and the page base. The interface is flat and neutral: solid
+   surfaces, 1px hairlines, one text colour ramp, and a single accent (the text
+   colour itself, used for primary buttons and the "on" state of controls). */
+:root {
+  /* the character (set per-page by App) */
+  --face: #93c572;
+  --iris: #307d76;
+  --s: 1;
+
+  /* surfaces */
+  --bg: #0a0a0a;
+  --surface: #141414;
+  --surface-2: #1c1c1c;
+  --surface-3: #262626;
+  --line: #262626;
+  --line-strong: #363636;
+
+  /* text */
+  --text: #ededed;
+  --text-2: #a3a3a3;
+  --text-3: #707070;
+  --on-accent: #0a0a0a;
+
+  /* status */
+  --ok: #4fb872;
+  --warn: #e2ad4b;
+  --danger: #e5645f;
+  --focus: rgba(237, 237, 237, 0.9);
+
+  /* shape and motion */
+  --radius: 12px;
+  --radius-sm: 8px;
+  --shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --t: 160ms;
+  --font: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+  line-height: 1.4;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+}
+
+button,
+input,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

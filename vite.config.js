@@ -4,6 +4,8 @@ import react from '@vitejs/plugin-react'
 import { liveProxy } from './server/liveProxy.js'
 import { faceRoutes } from './server/api.js'
 import { voiceRoutes } from './server/voiceApi.js'
+import { factRoutes } from './server/factsApi.js'
+import { factsRepo } from './server/db/facts.js'
 import { openDatabase } from './server/db/index.js'
 import { facesRepo } from './server/db/faces.js'
 import { voicesRepo } from './server/db/voices.js'
@@ -49,11 +51,16 @@ function backend(env) {
       })
     route(['/api/faces'], (db) => faceRoutes(db))
     route(['/api/voices', '/api/voice/'], (db) => voiceRoutes(db, voiceUrl))
-    liveProxy(env, async () => {
-      const db = await getDb()
-      const names = [...(await facesRepo(db).names()), ...(await voicesRepo(db).names())]
-      return [...new Set(names)].sort()
-    }).configureServer(server)
+    route(['/api/facts'], (db) => factRoutes(db))
+    liveProxy(
+      env,
+      async () => {
+        const db = await getDb()
+        const names = [...(await facesRepo(db).names()), ...(await voicesRepo(db).names())]
+        return [...new Set(names)].sort()
+      },
+      async () => factsRepo(await getDb()).list()
+    ).configureServer(server)
   }
   return { name: 'greeny-backend', configureServer: attach, configurePreviewServer: attach }
 }

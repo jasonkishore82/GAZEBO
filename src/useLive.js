@@ -236,7 +236,15 @@ export function useLive({ face = '', speaker = null, onPcm, voice = '', onToolCa
     setMessage('')
   }, [stop])
 
+  // ask the model to say something (a timer finished, someone arrived)
+  const say = useCallback((text) => {
+    const r = rt.current
+    if (!r?.ready || r.ws.readyState !== 1) return false
+    r.ws.send(JSON.stringify({ realtimeInput: { text } }))
+    return true
+  }, [])
+
   const toggle = useCallback(() => (rt.current ? (stop(), setState('off'), setMessage('')) : start()), [start, stop])
 
-  return { state, message, speaking, caption, levelRef, toggle, end }
+  return { state, message, speaking, caption, levelRef, toggle, end, say }
 }

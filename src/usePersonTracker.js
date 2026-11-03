@@ -163,6 +163,7 @@ export function usePersonTracker(settings, faces = []) {
   const [accel, setAccel] = useState(backend)
   const [attempt, setAttempt] = useState(0)
 
+  const cameraOn = settings.cameraOn !== false
   const retry = useCallback(() => setAttempt((a) => a + 1), [])
 
   // Takes a few samples of the face in front of the camera and resolves with
@@ -182,6 +183,12 @@ export function usePersonTracker(settings, faces = []) {
     let stream
 
     async function run() {
+      if (!cameraOn) {
+        setStatus({ state: 'off', message: 'Camera off' })
+        setTarget(null)
+        setFps(0)
+        return
+      }
       setStatus({ state: 'loading', message: 'Loading models' })
       let yolo, yunet
       try {
@@ -375,9 +382,10 @@ export function usePersonTracker(settings, faces = []) {
       captureRef.current?.reject(new Error('Camera stopped'))
       captureRef.current = null
       stream?.getTracks().forEach((t) => t.stop())
+      if (videoRef.current) videoRef.current.srcObject = null
       setTarget(null)
     }
-  }, [attempt])
+  }, [attempt, cameraOn])
 
   return { videoRef, target, status, fps, accel, retry, identity, captureFace }
 }

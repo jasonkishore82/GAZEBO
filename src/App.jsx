@@ -1,12 +1,17 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import Icon from './icons.jsx'
 import Eye from './Eye.jsx'
 import Mouth from './Mouth.jsx'
 import { useLive } from './useLive.js'
 import { useFaces } from './useFaces.js'
 import { useVoices } from './useVoices.js'
 import { useHeadTurn } from './useHeadTurn.js'
+import StudioAvatar from './StudioAvatar.jsx'
+import ThreeStage from './three/ThreeStage.jsx'
 import { createToolRunner } from './tools.js'
 import { useRegistration } from './useRegistration.js'
+import { useTimers } from './useTimers.js'
+import { chime } from './lib/beep.js'
 import { PendingCard } from './FacesWindow.jsx'
 import { describePolicy, mayWake } from './lib/wake.js'
 import { useSpeaker } from './useSpeaker.js'
@@ -21,7 +26,7 @@ import { lidClosure, sceneScale } from './lib/detection.js'
 
 // stable color per class so each object type keeps its box color
 function labelColor(cls) {
-  return cls === 0 ? '#3ddc97' : `hsl(${(cls * 47) % 360} 80% 60%)`
+  return cls === 0 ? '#ededed' : `hsl(${(cls * 47) % 360} 40% 68%)`
 }
 
 function useSceneScale(tall) {
@@ -55,7 +60,9 @@ export default function App() {
   const [settings, set, reset] = useSettings()
   const [panelOpen, setPanelOpen] = useState(false)
   const gearRef = useRef(null)
-  const scale = useSceneScale(settings.character3d ? 1060 : 760)
+  const studio = settings.avatar !== 'classic'
+  const threeD = settings.avatar === 'three'
+  const scale = useSceneScale(!studio && settings.character3d ? 1060 : 760)
   const facesApi = useFaces()
   const { videoRef, target, status, fps, accel, retry, identity, captureFace } = usePersonTracker(settings, facesApi.faces)
   const who = identity ? facesApi.faces.find((f) => f.id === identity.id)?.name ?? '' : ''
@@ -86,6 +93,27 @@ export default function App() {
   )
   const live = useLive({ face: who, speaker: voiceId.speaker, onPcm, voice: settings.voice, onToolCall: runTool })
   const liveOn = live.state === 'live'
+
+  // small messages that fade away (timers, reminders)
+  const [toasts, setToasts] = useState([])
+  const dismissToast = useCallback((id) => setToasts((t) => t.filter((x) => x.id !== id)), [])
+  const pushToast = useCallback(
+    (text) => {
+      const id = Math.random().toString(36).slice(2)
+      setToasts((t) => [...t, { id, text }])
+      setTimeout(() => dismissToast(id), 20000)
+    },
+    [dismissToast]
+  )
+  const liveRef = useRef(null)
+  liveRef.current = { on: liveOn, say: live.say }
+  const timers = useTimers({
+    onFire: ({ label }) => {
+      chime()
+      pushToast(`Timer done: ${label}`)
+      liveRef.current?.say?.(`[App] The timer "${label}" has just finished. Tell the user it is done, in one short sentence.`)
+    },
+  })
   const { reset: resetSpeaker } = voiceId
   useEffect(() => {
     if (!liveOn) resetSpeaker()
@@ -95,8 +123,9 @@ export default function App() {
   const [win, setWin] = useState(null) // null | 'add' | 'manage' | 'record'
   const addRef = useRef(null)
   const manageRef = useRef(null)
-  const faceOn = settings.blink || settings.showLandmarks
-  const { blink, hand, marks } = useLandmarks(videoRef, { face: faceOn, hands: settings.hands })
+  const cameraOn = settings.cameraOn !== false
+  const faceOn = (settings.blink || settings.showLandmarks) && cameraOn
+  const { blink, hand, marks } = useLandmarks(videoRef, { face: faceOn, hands: settings.hands && cameraOn })
 
   useEffect(() => {
     const onMove = (e) => setMouse({ x: e.clientX, y: e.clientY })
@@ -151,7 +180,32 @@ export default function App() {
   else if (stage === 2) mood = 'asleep'
   else if (stage === 1) mood = 'sleepy'
   else if (target || hand) mood = 'curious'
+  // a feeling the avatar was asked to show (show_emotion) wins over the automatic mood
+  const [emotion, setEmotionState] = useState(null)
+  const emotionTimer = useRef(0)
+  const showEmotion = useCallback((m, seconds) => {
+    setEmotionState(m)
+    clearTimeout(emotionTimer.current)
+    emotionTimer.current = setTimeout(() => setEmotionState(null), seconds * 1000)
+  }, [])
+  if (emotion && mood !== 'asleep') mood = emotion
   const asleep = mood === 'asleep'
+
+  // greet_on_arrival: when a registered person comes back after being away a
+  // while, ask the model to say hello. Needs a voice chat to be running.
+  const greetRef = useRef(false)
+  const seenAt = useRef({})
+  useEffect(() => {
+    if (!who) return
+    const prev = seenAt.current[who]
+    const now = Date.now()
+    seenAt.current[who] = now
+    if (greetRef.current && liveRef.current?.on && (!prev || now - prev > 20000)) {
+      liveRef.current.say(`[App] ${who} has just arrived in front of the camera. Greet them by name, in one short warm sentence.`)
+    }
+    const id = setInterval(() => (seenAt.current[who] = Date.now()), 4000)
+    return () => clearInterval(id)
+  }, [who])
 
   // Tools ask for sleep: say goodnight first, then end the chat and doze off.
   const endLive = live.end
@@ -196,6 +250,9 @@ export default function App() {
     },
     setSetting: set,
     registration,
+    showEmotion,
+    setGreet: (on) => (greetRef.current = on),
+    timers,
   }
 
   // now and then the eyes glance away and come back, like a person's would
@@ -232,7 +289,7 @@ export default function App() {
 
   // the head follows the person; asleep, it droops
   lookRef.current = asleep ? { x: window.innerWidth / 2, y: window.innerHeight } : watching
-  useHeadTurn(appRef, lookRef, settings.character3d)
+  useHeadTurn(appRef, lookRef, studio || settings.character3d)
 
   const pct = (v) => `${Math.max(0, Math.min(100, v * 100))}%`
   // boxes are in video coordinates; the preview is mirrored, so flip x
@@ -244,22 +301,43 @@ export default function App() {
     '--box': color,
   })
 
-  const showCam = settings.showPreview
-  const dot = BLOCKED.has(status.state) ? 'bad' : status.state === 'tracking' ? 'ok' : 'wait'
+  const showCam = settings.showPreview && cameraOn
+  const dot = BLOCKED.has(status.state) ? 'bad' : status.state === 'tracking' ? 'ok' : status.state === 'off' ? '' : 'wait'
 
   return (
     <div
       ref={appRef}
-      className={`app${settings.character3d ? ' is-3d' : ''}`}
+      className={`app${studio ? ' studio' : settings.character3d ? ' is-3d' : ''}`}
       style={{ '--face': settings.faceColor, '--iris': settings.eyeColor, '--s': scale }}
     >
-      {settings.character3d && (
+      {threeD && (
+        <ThreeStage mood={mood} mouthMood={live.speaking ? 'talking' : mood} levelRef={live.levelRef} lookRef={lookRef} color={settings.eyeColor} />
+      )}
+      {studio && !threeD && (
+        <>
+          <div className="studio-floor" />
+          <div className="head">
+            <StudioAvatar
+              look={look}
+              mood={mood}
+              mouthMood={live.speaking ? 'talking' : mood}
+              contact={contact}
+              expression={settings.expression}
+              syncLeft={settings.blink && blink ? lidClosure(blink.left, settings.blinkSens) : null}
+              syncRight={settings.blink && blink ? lidClosure(blink.right, settings.blinkSens) : null}
+              levelRef={live.levelRef}
+            />
+          </div>
+        </>
+      )}
+      {!studio && settings.character3d && (
         <>
           <div className="neck" />
           <div className="body" />
           <div className="core" />
         </>
       )}
+      {!studio && (
       <div className="head">
         {settings.character3d && (
           <>
@@ -290,6 +368,7 @@ export default function App() {
 
         <Mouth look={look} mood={live.speaking ? 'talking' : mood} levelRef={live.levelRef} />
       </div>
+      )}
 
       {asleep && (
         <div className="zzz" aria-hidden="true">
@@ -299,36 +378,63 @@ export default function App() {
         </div>
       )}
 
-      {live.caption && <p className="caption">{live.caption}</p>}
+      {live.caption && <p className="caption surface">{live.caption}</p>}
 
       {settings.hands && settings.charHands && (
         <CharacterHands marks={marks} videoRef={videoRef} color={settings.faceColor} />
       )}
 
-      <div className="pill" role="status" aria-live="polite">
-        <span className={`dot ${dot}`} aria-hidden="true" />
-        {live.state === 'connecting' ? live.message : asleep && policy ? `Asleep \u00b7 ${describePolicy(policy)}` : statusText(status, target, fps, who, accel)}
+      <div className="stack">
+        <div className="status surface" role="status" aria-live="polite">
+          <span className={`dot ${dot}`} aria-hidden="true" />
+          {live.state === 'connecting'
+            ? live.message
+            : asleep && policy
+              ? `Asleep \u00b7 ${describePolicy(policy)}`
+              : statusText(status, target, fps, who, accel)}
+        </div>
+
+        {liveOn && voiceId.speaker && (
+          <div
+            className={`status surface${voiceId.speaker.name && who && voiceId.speaker.name !== who ? ' warn' : ''}`}
+            role="status"
+          >
+            {voiceId.speaker.name ? `${voiceId.speaker.name} is speaking` : 'Unrecognised voice'}
+            {voiceId.speaker.name && who && voiceId.speaker.name !== who ? ` \u00b7 not ${who}` : ''}
+          </div>
+        )}
+
+        {toasts.map((t) => (
+          <div key={t.id} className="note surface" role="status">
+            <strong>{t.text}</strong>
+            <button className="btn sm" style={{ marginTop: 8 }} onClick={() => dismissToast(t.id)}>
+              Dismiss
+            </button>
+          </div>
+        ))}
+
+        {BLOCKED.has(status.state) && (
+          <div className="note surface" role="alert">
+            <strong>{status.message}</strong>
+            <p>{HELP[status.state]}</p>
+            <button className="btn sm" onClick={retry}>
+              Try again
+            </button>
+          </div>
+        )}
+
+        {live.state === 'error' && (
+          <div className="note surface" role="alert">
+            <strong>Voice chat unavailable</strong>
+            <p>{live.message}</p>
+            <button className="btn sm" onClick={live.toggle}>
+              Try again
+            </button>
+          </div>
+        )}
       </div>
 
-      {BLOCKED.has(status.state) && (
-        <div className="notice" role="alert">
-          <strong>{status.message}</strong>
-          <p>{HELP[status.state]}</p>
-          <button className="btn" onClick={retry}>
-            Try again
-          </button>
-        </div>
-      )}
-
-      {live.state === 'error' && (
-        <div className="notice live-notice" role="alert">
-          <strong>Voice chat unavailable</strong>
-          <p>{live.message}</p>
-          <button className="btn" onClick={live.toggle}>Try again</button>
-        </div>
-      )}
-
-      <figure className="preview" style={{ display: showCam ? 'block' : 'none' }}>
+      <figure className="preview surface" style={{ display: showCam ? 'block' : 'none' }}>
         <video ref={videoRef} muted playsInline aria-label="Camera preview" />
         {settings.showLandmarks && (
           <LandmarkOverlay marks={marks} faceOn={faceOn} handsOn={settings.hands} />
@@ -342,7 +448,7 @@ export default function App() {
             </div>
           ))}
         {settings.showBoxes && target?.face && (
-          <div className="bbox is-face" style={boxStyle(target.face, '#ffd54a')}>
+          <div className="bbox is-face" style={boxStyle(target.face, '#e2ad4b')}>
             <span>face {Math.round(target.face.score * 100)}%</span>
           </div>
         )}
@@ -391,13 +497,6 @@ export default function App() {
         />
       )}
 
-      {liveOn && voiceId.speaker && (
-        <div className={`speaker-chip${voiceId.speaker.name && who && voiceId.speaker.name !== who ? ' other' : ''}`} role="status">
-          {voiceId.speaker.name ? `${voiceId.speaker.name} is speaking` : 'Unrecognised voice'}
-          {voiceId.speaker.name && who && voiceId.speaker.name !== who ? ` \u00b7 not ${who}` : ''}
-        </div>
-      )}
-
       {panelOpen && (
         <SettingsPanel
           settings={settings}
@@ -408,73 +507,47 @@ export default function App() {
         />
       )}
 
-      <nav className="dock" aria-label="Controls">
+      <nav className="dock surface" aria-label="Controls">
         <button
-          className="icon-btn"
-          onClick={() => set('showPreview', !showCam)}
-          aria-label={showCam ? 'Hide camera preview' : 'Show camera preview'}
-          aria-pressed={showCam}
-          title={showCam ? 'Hide camera' : 'Show camera'}
+          className="icon-btn dock-btn"
+          onClick={() => set('cameraOn', !cameraOn)}
+          aria-label={cameraOn ? 'Turn camera off' : 'Turn camera on'}
+          aria-pressed={cameraOn}
+          data-tip={cameraOn ? 'Turn camera off' : 'Turn camera on'}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <path d="M23 7l-7 5 7 5V7z" />
-            <rect x="1" y="5" width="15" height="14" rx="2" />
-            {!showCam && <path d="M2 2l20 20" />}
-          </svg>
+          <Icon name={cameraOn ? 'video' : 'video-off'} />
         </button>
-        <button
-          ref={addRef}
-          className="icon-btn"
-          onClick={() => setWin('add')}
-          aria-label="Add face"
-          title="Add face"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="10" cy="8" r="4" />
-            <path d="M2 21a8 8 0 0 1 12.5-6.6M19 14v6M16 17h6" />
-          </svg>
+        <span className="dock-sep" role="separator" />
+        <button ref={addRef} className="icon-btn dock-btn" onClick={() => {
+            set('cameraOn', true) // adding a face needs the camera
+            setWin('add')
+          }}
+          aria-label="Add face" data-tip="Add face">
+          <Icon name="user-plus" />
         </button>
-        <button
-          ref={manageRef}
-          className="icon-btn"
-          onClick={() => setWin('manage')}
-          aria-label="Faces and voices"
-          title="Faces and voices"
-        >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="9" cy="8" r="3.5" />
-            <path d="M2 20a7 7 0 0 1 14 0M16 4.5a3.5 3.5 0 0 1 0 7M18 14a7 7 0 0 1 4 6" />
-          </svg>
+        <button ref={manageRef} className="icon-btn dock-btn" onClick={() => setWin('manage')} aria-label="People" data-tip="People">
+          <Icon name="users" />
         </button>
+        <span className="dock-sep" role="separator" />
         <button
-          className={`icon-btn mic${live.state === 'live' ? ' on' : live.state === 'connecting' ? ' wait' : live.state === 'error' ? ' bad' : ''}`}
+          className="icon-btn dock-btn"
           onClick={live.toggle}
           aria-label={live.state === 'off' || live.state === 'error' ? 'Start voice chat' : 'End voice chat'}
           aria-pressed={live.state === 'live' || live.state === 'connecting'}
-          title={live.state === 'live' ? 'End voice chat' : 'Talk to Greeny'}
+          data-tip={live.state === 'live' || live.state === 'connecting' ? 'End voice chat' : 'Talk'}
+          data-state={live.state === 'live' ? 'live' : live.state === 'connecting' ? 'wait' : live.state === 'error' ? 'bad' : undefined}
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <rect x="9" y="2" width="6" height="12" rx="3" />
-            <path d="M5 11a7 7 0 0 0 14 0M12 18v4" />
-          </svg>
+          <Icon name="mic" />
         </button>
         <button
           ref={gearRef}
-          className="icon-btn"
+          className="icon-btn dock-btn"
           onClick={() => setPanelOpen((v) => !v)}
           aria-label="Settings"
           aria-expanded={panelOpen}
-          title="Settings"
+          data-tip="Settings"
         >
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-               strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <circle cx="12" cy="12" r="3" />
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-          </svg>
+          <Icon name="sliders" />
         </button>
       </nav>
     </div>
